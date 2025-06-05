@@ -23,7 +23,7 @@ final class Account
 
         return new self(Http::createFromString($url), ...parseResponse($payload, [
             'status' => enum(AccountStatus::getAll()),
-            'contact' => multiple(contact()),
+            'contact' => optional(multiple(contact())),
             'orders' => optional(url()),
         ]));
     }
@@ -53,14 +53,14 @@ final class Account
      *
      * @param UriInterface      $url URI of the registration object.
      * @param string            $status The status of this account.
-     * @param array             $contact All contacts registered with the server.
+     * @param array|null        $contact All contacts registered with the server.
      * @param UriInterface|null $ordersUrl An url to fetch orders for this registration from
      */
-    public function __construct(UriInterface $url, string $status, array $contact = [], ?UriInterface $ordersUrl = null)
+    public function __construct(UriInterface $url, string $status, ?array $contact = null, ?UriInterface $ordersUrl = null)
     {
         $this->url = $url;
         $this->status = $status;
-        $this->contacts = $contact;
+        $this->contacts = \is_array($contact) ? $contact : [];
         $this->ordersUrl = $ordersUrl;
     }
 
