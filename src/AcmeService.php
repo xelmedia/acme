@@ -61,12 +61,12 @@ class AcmeService
                 "mailto:{$email}",
             ],
         ]);
+        $buffer = $this->getBuffer($response);
 
         if (\in_array($response->getStatus(), [200, 201], true)) {
-            return Account::fromResponse($response->getHeader('location'), $response->getBody()->buffer());
+            return Account::fromResponse($response->getHeader('location'), $buffer);
         }
-
-        throw $this->generateException($response, $response->getBody()->buffer());
+        throw $this->generateException($response, $buffer);
     }
 
     /**
@@ -77,12 +77,13 @@ class AcmeService
         $this->logger->info('Retrieving order ' . $url);
 
         $response = $this->client->post($url, null);
+        $buffer = $this->getBuffer($response);
 
         if ($response->getStatus() === 200) {
-            return Order::fromResponse($url, $response->getBody()->buffer());
+            return Order::fromResponse($url, $buffer);
         }
 
-        throw $this->generateException($response, $response->getBody()->buffer());
+        throw $this->generateException($response, $buffer);
     }
 
     /**
@@ -116,12 +117,13 @@ class AcmeService
         }
 
         $response = $this->client->post(AcmeResource::NEW_ORDER, $request);
+        $buffer = $this->getBuffer($response);
 
         if ($response->getStatus() === 201) {
-            return Order::fromResponse($response->getHeader('location'), $response->getBody()->buffer());
+            return Order::fromResponse($response->getHeader('location'), $buffer);
         }
 
-        throw $this->generateException($response, $response->getBody()->buffer());
+        throw $this->generateException($response, $buffer);
     }
 
     /**
@@ -134,11 +136,12 @@ class AcmeService
         $this->logger->info('Finalizing challenge ' . $url);
 
         $response = $this->client->post($url, []);
+        $buffer = $this->getBuffer($response);
 
         try {
-            return Challenge::fromResponse($response->getBody()->buffer());
+            return Challenge::fromResponse($buffer);
         } catch (\Throwable $_) {
-            throw $this->generateException($response, $response->getBody()->buffer());
+            throw $this->generateException($response, $buffer);
         }
     }
 
@@ -150,11 +153,12 @@ class AcmeService
         $this->logger->info('Retrieving authorization ' . $url);
 
         $response = $this->client->post($url, null);
+        $buffer = $this->getBuffer($response);
 
         try {
-            return Authorization::fromResponse($url, $response->getBody()->buffer());
+            return Authorization::fromResponse($url, $buffer);
         } catch (\Throwable $_) {
-            throw $this->generateException($response, $response->getBody()->buffer());
+            throw $this->generateException($response, $buffer);
         }
     }
 
@@ -166,11 +170,12 @@ class AcmeService
         $this->logger->info('Retrieving challenge ' . $url);
 
         $response = $this->client->post($url, null);
+        $buffer = $this->getBuffer($response);
 
         try {
-            return Challenge::fromResponse($response->getBody()->buffer());
+            return Challenge::fromResponse($buffer);
         } catch (\Throwable $_) {
-            throw $this->generateException($response, $response->getBody()->buffer());
+            throw $this->generateException($response, $buffer);
         }
     }
 
@@ -285,12 +290,13 @@ class AcmeService
         $response = $this->client->post($url, [
             'csr' => base64UrlEncode(\base64_decode($csr)),
         ]);
+        $buffer = $this->getBuffer($response);
 
         if ($response->getStatus() === 200) {
-            return Order::fromResponse($response->getHeader('location'), $response->getBody()->buffer());
+            return Order::fromResponse($response->getHeader('location'), $buffer);
         }
 
-        throw $this->generateException($response, $response->getBody()->buffer());
+        throw $this->generateException($response, $buffer);
     }
 
     /**
@@ -305,9 +311,10 @@ class AcmeService
         $this->logger->info('Downloading certificate ' . $url);
 
         $response = $this->client->post($url, null);
+        $buffer = $this->getBuffer($response);
 
         if ($response->getStatus() === 200) {
-            $certificateChain = $response->getBody()->buffer();
+            $certificateChain = $buffer;
             $certificates = [];
 
             while (\preg_match(
@@ -324,7 +331,7 @@ class AcmeService
             return $certificates;
         }
 
-        throw $this->generateException($response, $response->getBody()->buffer());
+        throw $this->generateException($response, $buffer);
     }
 
     /**
@@ -389,5 +396,31 @@ class AcmeService
         }
 
         return new AcmeException("Invalid response: {$body}.\nRequest URI: {$uri}.", $status);
+    }
+
+    /**
+     * Safely retrieves the buffered body content from a Response object.
+     *
+     * This method wraps the call to $response->getBody()->buffer() and ensures proper error handling.
+     *
+     * ⚠️ Important:
+     * - The response body stream can **only be buffered once**.
+     * - Subsequent calls to `buffer()` on the same stream instance will throw an error:
+     *   `"Can't buffer() a payload more than once"`.
+     *
+     * Usage:
+     * - Use this method once per response instance, and **store the result** if you need it later.
+     *
+     * @param Response $response The HTTP response whose body should be buffered.
+     * @return string The buffered body content.
+     * @throws AcmeException If buffering fails (e.g., due to double-read or stream error).
+     */
+    private function getBuffer(Response $response): string
+    {
+        try {
+            return $response->getBody()->buffer();
+        } catch (\Throwable $t) {
+            throw $this->generateException($response, "Error parsing buffer from response: {$t->getMessage()}");
+        }
     }
 }
